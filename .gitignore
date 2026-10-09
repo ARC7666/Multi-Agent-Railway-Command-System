@@ -1,0 +1,15 @@
+# Virtual Environments
+venv/
+env/
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Vector DB
+chroma/
+chroma_db/
+*sqlite3

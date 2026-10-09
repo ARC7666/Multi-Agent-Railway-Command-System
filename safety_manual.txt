@@ -1,0 +1,18 @@
+RAILWAY SAFETY AND COMPLIANCE MANUAL
+
+SECTION 1: ROUTING PRIORITIES
+1.1 Passenger Express trains (Priority 1) MUST always be given precedence over Freight trains (Priority 2), unless the Express train is experiencing an emergency.
+1.2 In the event of a tie in priority, the train closest to its destination is given precedence.
+
+SECTION 2: TRACK FAILURES
+2.1 If a track is marked as "broken", no train may enter it.
+2.2 The dispatcher must immediately find an alternative route using active tracks.
+
+SECTION 3: SEVERE EMERGENCIES AND HAZMAT
+3.1 HAZMAT SPILL: If a train carrying hazardous materials experiences a spill, the node where the spill occurred is completely quarantined.
+3.2 HAZMAT SPILL PROTOCOL: All trains must be rerouted to avoid the quarantined node entirely. Any train within 1 step of the spill must halt immediately.
+3.3 ENGINE FIRE: If a train reports an engine fire, it is immobilized. All other trains must be routed around the burning train.
+
+SECTION 4: SPEED AND WEATHER
+4.1 Heavy Snow: Speed limits on all tracks are halved.
+4.2 High Winds: Freight trains must halt. Express trains may proceed at half speed.
