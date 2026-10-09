@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 from typing import Dict, Any, List, Optional
@@ -6,6 +7,15 @@ from simulation import TrainSimulation
 import networkx as nx
 
 app = FastAPI(title="Railway Simulation API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 sim = TrainSimulation()
 
 class HazardRequest(BaseModel):
@@ -44,6 +54,10 @@ async def simulation_loop() -> None:
     while sim.is_running:
         sim.step()
         await asyncio.sleep(2)
+
+@app.get("/ping")
+def ping():
+    return {"status": "alive", "message": "Render keep-alive successful"}
 
 @app.post("/start")
 def start_simulation(background_tasks: BackgroundTasks) -> Dict[str, str]:

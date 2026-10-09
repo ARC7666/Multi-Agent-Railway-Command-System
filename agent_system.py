@@ -41,7 +41,7 @@ def track_state_agent(state: TrackState) -> TrackState:
     active_network = network.edge_subgraph(active_edges)
     
     for train in trains:
-        if not train.get('path'):
+        if not train.get('path') or len(train['path']) <= 1:
             try:
                 if train['position'] in active_network and train['destination'] in active_network:
                     path = nx.shortest_path(active_network, source=train['position'], target=train['destination'])

@@ -16,17 +16,22 @@ class TrainSimulation:
         """Resets the simulation to its initial state."""
         self.network: nx.Graph = create_railway_network()
         self.trains: List[Dict[str, Any]] = [
-            {"id": "Vande Bharat (UP)", "position": "Howrah (HWH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Rajdhani Exp (UP)", "position": "Sealdah (SDAH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Shatabdi Exp (UP)", "position": "Howrah (HWH)", "destination": "Durgapur (DGR)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Bandel Local (UP)", "position": "Howrah (HWH)", "destination": "Bandel (BDC)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Coal Freight 1 (UP)", "position": "Bardhaman (BWN)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Coal Freight 2 (DN)", "position": "Asansol (ASN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Steel Express (DN)", "position": "Durgapur (DGR)", "destination": "Sealdah (SDAH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Howrah Local 1 (DN)", "position": "Bandel (BDC)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Howrah Local 2 (DN)", "position": "Bardhaman (BWN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            {"id": "Oil Tanker (DN)", "position": "Asansol (ASN)", "destination": "Sealdah (SDAH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0}
+            # 2 Premium Trains
+            {"base_name": "Rajdhani Exp", "position": "Sealdah (SDAH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            {"base_name": "Vande Bharat", "position": "Asansol (ASN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
+            # 2 Local Trains
+            {"base_name": "Local", "position": "Howrah (HWH)", "destination": "Bardhaman (BWN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            {"base_name": "Local", "position": "Bardhaman (BWN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
+            # 1 Normal Express
+            {"base_name": "Poorva Exp", "position": "Sealdah (SDAH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            # 2 Freight Trains
+            {"base_name": "Coal Freight 1", "position": "Durgapur (DGR)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
+            {"base_name": "Oil Tanker", "position": "Bandel (BDC)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0}
         ]
+        
+        for idx, t in enumerate(self.trains):
+            t['uid'] = idx + 1
+            t['id'] = self._generate_train_name(t, t['uid'])
         self.time_step: int = 0
         self.agent = build_graph()
         self.logs: Dict[str, List[str]] = {
@@ -42,6 +47,13 @@ class TrainSimulation:
         self.is_running: bool = False
         self.last_ai_action: Optional[str] = None
         self.last_ai_action_time: Optional[float] = None
+
+    def _generate_train_name(self, t: Dict[str, Any], uid: int) -> str:
+        dest_city = t['destination'].split(" ")[0]
+        if "Local" in t['base_name']:
+            return f"{dest_city} Local {uid} ({t['dir']})"
+        else:
+            return f"{t['base_name']} ({t['dir']})"
 
     def add_log(self, msg: str, u: Optional[str] = None, v: Optional[str] = None) -> None:
         """Adds a log message to the appropriate section."""
@@ -103,8 +115,9 @@ class TrainSimulation:
             self.last_ai_action = f"[SUCCESS] AI successfully rerouted all {direction} trains to the {diverted_to} track!"
             self.last_ai_action_time = datetime.datetime.now().timestamp()
         else:
-            if not self.logs["System"] or not self.logs["System"][-1].endswith("Optimization Nominal. 10 trains tracking on multi-line sections."):
-                self.add_log(f"[{ts}] Optimization Nominal. 10 trains tracking on multi-line sections.")
+            msg = f"[{ts}] Optimization Nominal. {len(self.trains)} trains tracking on multi-line sections."
+            if not self.logs["System"] or self.logs["System"][-1] != msg:
+                self.add_log(msg)
 
         if result.get("resolved"):
             self.emergencies.clear()
@@ -142,14 +155,19 @@ class TrainSimulation:
                         t['progress'] = 0.0
 
                         if t['position'] == t['destination']:
+                            old_id = t['id']
                             if t['dir'] == "UP":
                                 t['dir'] = "DN"
-                                t['destination'] = random.choice(["Howrah (HWH)", "Sealdah (SDAH)"])
-                                self.add_log(f"[{ts}] [TURNAROUND]: {t['id']} reached UP terminus. Heading back DN to {t['destination']}.")
+                                if t['base_name'] == "Rajdhani Exp":
+                                    t['destination'] = "Sealdah (SDAH)"
+                                else:
+                                    t['destination'] = random.choice(["Howrah (HWH)", "Sealdah (SDAH)"])
                             else:
                                 t['dir'] = "UP"
                                 t['destination'] = "Asansol (ASN)"
-                                self.add_log(f"[{ts}] [TURNAROUND]: {t['id']} reached DN terminus. Heading back UP to {t['destination']}.")
+                            
+                            t['id'] = self._generate_train_name(t, t.get('uid', 0))
+                            self.add_log(f"[{ts}] [TURNAROUND]: {old_id} reached terminus. Heading back as {t['id']} to {t['destination']}.")
 
         self.trains = updated_trains
         self.time_step += 1
