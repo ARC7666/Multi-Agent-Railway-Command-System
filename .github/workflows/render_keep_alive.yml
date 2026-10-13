@@ -1,0 +1,20 @@
+name: Render Free-Tier Keep-Alive
+
+on:
+  schedule:
+    # Runs every 14 minutes (Render free instances sleep after 15 minutes of inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          BACKEND_URL="${{ secrets.RENDER_BACKEND_URL }}"
+          if [ -z "$BACKEND_URL" ]; then
+            BACKEND_URL="https://railway-ai-backend.onrender.com"
+          fi
+          echo "Pinging $BACKEND_URL/ping ..."
+          curl -s -f "$BACKEND_URL/ping" || echo "Ping dispatched"

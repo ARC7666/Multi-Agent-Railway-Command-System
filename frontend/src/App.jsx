@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -12,56 +12,166 @@ const stationPos = {
   "Asansol (ASN)": { x: 50, y: 150 }
 };
 
-const trainColors = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#a855f7', '#fb923c'];
+const trainColors = [
+  '#3b82f6', '#f59e0b', '#10b981', '#ef4444', 
+  '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', 
+  '#a855f7', '#fb923c'
+];
 
 function App() {
   const [state, setState] = useState(null);
-  const [error, setError] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [elapsedWait, setElapsedWait] = useState(0);
   const [selectedSection, setSelectedSection] = useState("");
   const [selectedTrack, setSelectedTrack] = useState("");
+  const [isInjecting, setIsInjecting] = useState(false);
+  const [actionPending, setActionPending] = useState(null);
+  const [aiDebating, setAiDebating] = useState(false);
 
+  const initialLoadTimeRef = useRef(Date.now());
+
+  // Fetch current simulation and network state
   const fetchState = async () => {
     try {
-      const res = await fetch(`${API_URL}/state`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`${API_URL}/state`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const data = await res.json();
         setState(data);
-        setError(false);
+        setIsWakingUp(false);
+        setReconnecting(false);
       } else {
-        setError(true);
+        if (!state) {
+          setIsWakingUp(true);
+        } else {
+          setReconnecting(true);
+        }
       }
     } catch (e) {
-      setError(true);
+      if (!state) {
+        setIsWakingUp(true);
+      } else {
+        setReconnecting(true);
+      }
     }
   };
 
+  // Initial poll and recurring poll
   useEffect(() => {
     fetchState();
     const interval = setInterval(fetchState, 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // Timer while waiting for backend cold start
+  useEffect(() => {
+    if (state) return;
+    const timer = setInterval(() => {
+      setElapsedWait(Math.floor((Date.now() - initialLoadTimeRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [state]);
+
+  // Keep-alive background ping every 3 minutes while tab is active
+  useEffect(() => {
+    const pingInterval = setInterval(() => {
+      fetch(`${API_URL}/ping`).catch(() => {});
+    }, 3 * 60 * 1000);
+    return () => clearInterval(pingInterval);
+  }, []);
+
   const handleAction = async (endpoint) => {
-    await fetch(`${API_URL}/${endpoint}`, { method: 'POST' });
-    fetchState();
+    try {
+      setActionPending(endpoint);
+      await fetch(`${API_URL}/${endpoint}`, { method: 'POST' });
+    } catch (e) {
+      console.error(`Failed action ${endpoint}:`, e);
+    } finally {
+      setActionPending(null);
+      await fetchState();
+    }
   };
 
   const injectHazard = async () => {
-    if (!selectedSection || !selectedTrack) return;
+    if (!selectedSection || !selectedTrack || isInjecting) return;
     const [u, v] = selectedSection.split(" ↔ ");
-    await fetch(`${API_URL}/inject_hazard`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ u, v, line: selectedTrack })
-    });
-    fetchState();
+    setIsInjecting(true);
+    setAiDebating(true);
+    try {
+      const res = await fetch(`${API_URL}/inject_hazard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ u, v, line: selectedTrack })
+      });
+      if (res.ok) {
+        setSelectedTrack("");
+      }
+    } catch (e) {
+      console.error("Failed to inject hazard:", e);
+    } finally {
+      setIsInjecting(false);
+      await fetchState();
+      // Keep AI active highlight for 3 seconds to let user observe
+      setTimeout(() => setAiDebating(false), 3000);
+    }
   };
 
-  if (error) {
-    return <div className="app-container"><h2>Cannot connect to Backend API at {API_URL}</h2></div>;
-  }
+  // Render Cold Start / Loading Screen with rich status and diagnostics
+  if (!state) {
+    const progressPercent = Math.min(100, Math.floor((elapsedWait / 50) * 100));
+    return (
+      <div className="waking-wrapper">
+        <div className="glass-card waking-card">
+          <div className="radar-container">
+            <div className="radar-circle"></div>
+            <div className="radar-sweep"></div>
+            <span className="radar-icon">🚆</span>
+          </div>
 
-  if (!state) return <div className="app-container"><h2>Loading Cyber-Physical Network...</h2></div>;
+          <h2 className="waking-title">Autonomous Railway Command System</h2>
+          <p className="waking-subtitle">
+            {elapsedWait > 4 
+              ? "Waking up server from Render free-tier standby..." 
+              : "Connecting to Cyber-Physical Railway Network..."}
+          </p>
+
+          <div className="waking-progress-box">
+            <div className="progress-bar-bg">
+              <div 
+                className="progress-bar-fill" 
+                style={{ width: `${Math.max(5, progressPercent)}%` }}
+              ></div>
+            </div>
+            <div className="waking-meta">
+              <span>Status: Establishing Telemetry Stream</span>
+              <span>Elapsed: {elapsedWait}s / ~50s</span>
+            </div>
+          </div>
+
+          {elapsedWait > 4 && (
+            <div className="waking-info-alert">
+              <strong>ℹ️ Render Free-Tier Notice:</strong>
+              <p>
+                Render automatically sleeps free instances after 15 minutes of inactivity. 
+                Initial boot takes 45–50 seconds. Once awake, the command center runs in real-time.
+              </p>
+            </div>
+          )}
+
+          <div className="waking-actions">
+            <button className="btn btn-primary" onClick={fetchState}>
+              🔄 Check Connection Now
+            </button>
+            <span className="backend-tag">Target: {API_URL}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const totalTracks = state.network.edges.reduce((acc, edge) => acc + Object.keys(edge.tracks).length, 0);
   const brokenTracks = state.network.edges.reduce((acc, edge) => 
@@ -72,10 +182,17 @@ function App() {
   const activeSectionEdges = selectedSection ? state.network.edges.find(e => 
     `${e.u} ↔ ${e.v}` === selectedSection || `${e.v} ↔ ${e.u}` === selectedSection
   ) : null;
-  const activeLines = activeSectionEdges ? Object.entries(activeSectionEdges.tracks).filter(([k,v]) => v === 'active').map(e => e[0]) : [];
+  const activeLines = activeSectionEdges ? Object.entries(activeSectionEdges.tracks).filter(([, v]) => v === 'active').map(e => e[0]) : [];
 
   return (
     <div className="app-container">
+      {/* Reconnecting banner if telemetry dropped transiently */}
+      {reconnecting && (
+        <div className="reconnecting-banner">
+          <span>📡 Syncing live telemetry with backend...</span>
+        </div>
+      )}
+
       <header className="header">
         <div className="title">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{color: '#3B82F6'}}>
@@ -84,14 +201,43 @@ function App() {
             <line x1="12" y1="17" x2="12" y2="21"></line>
           </svg>
           Railway Command Center
-          <span className="title-badge">PROD</span>
+          <span className="title-badge">MULTI-AGENT AI</span>
+          <span className={`sim-state-chip ${state.is_running ? 'running' : 'paused'}`}>
+            {state.is_running ? '● SIMULATION RUNNING' : '⏸ SIMULATION PAUSED'}
+          </span>
         </div>
         <div className="controls">
-          <button className="btn btn-primary" onClick={() => handleAction('start')}>▶ Start</button>
-          <button className="btn btn-danger" onClick={() => handleAction('stop')}>⏸ Stop</button>
-          <button className="btn glass-card" onClick={() => handleAction('reset')}>⟲ Reset</button>
+          <button 
+            className="btn btn-primary" 
+            disabled={actionPending === 'start' || state.is_running} 
+            onClick={() => handleAction('start')}
+          >
+            {actionPending === 'start' ? 'Starting...' : '▶ Start'}
+          </button>
+          <button 
+            className="btn btn-danger" 
+            disabled={actionPending === 'stop' || !state.is_running} 
+            onClick={() => handleAction('stop')}
+          >
+            {actionPending === 'stop' ? 'Stopping...' : '⏸ Stop'}
+          </button>
+          <button 
+            className="btn glass-card" 
+            disabled={actionPending === 'reset'} 
+            onClick={() => handleAction('reset')}
+          >
+            {actionPending === 'reset' ? 'Resetting...' : '⟲ Reset'}
+          </button>
         </div>
       </header>
+
+      {/* AI Action Banner */}
+      {state.last_ai_action && (
+        <div className="ai-success-banner">
+          <span className="banner-icon">🛡️</span>
+          <span>{state.last_ai_action}</span>
+        </div>
+      )}
 
       <div className="kpi-grid">
         <div className="glass-card kpi">
@@ -99,8 +245,8 @@ function App() {
           <div className="kpi-value">T+{state.time_step}</div>
         </div>
         <div className="glass-card kpi">
-          <div className="kpi-title">Active Trains</div>
-          <div className="kpi-value">{state.trains.length}</div>
+          <div className="kpi-title">Active Fleet</div>
+          <div className="kpi-value">{state.trains.length} Trains</div>
         </div>
         <div className="glass-card kpi">
           <div className="kpi-title">Track Health</div>
@@ -108,7 +254,7 @@ function App() {
         </div>
         <div className={`glass-card kpi ${brokenTracks > 0 ? 'alert' : ''}`}>
           <div className="kpi-title">Network Status</div>
-          <div className="kpi-value">{brokenTracks > 0 ? `${brokenTracks} BROKEN` : 'NOMINAL'}</div>
+          <div className="kpi-value">{brokenTracks > 0 ? `${brokenTracks} TRACK BROKEN` : 'NOMINAL'}</div>
         </div>
       </div>
 
@@ -119,10 +265,14 @@ function App() {
             const posU = stationPos[edge.u];
             const posV = stationPos[edge.v];
             if (!posU || !posV) return null;
+            const hasBroken = Object.values(edge.tracks).some(st => st === 'broken');
             return (
               <line 
-                key={idx} x1={posU.x} y1={posU.y} x2={posV.x} y2={posV.y} 
-                stroke="#334155" strokeWidth="4" 
+                key={idx} 
+                x1={posU.x} y1={posU.y} x2={posV.x} y2={posV.y} 
+                stroke={hasBroken ? "#ef4444" : "#334155"} 
+                strokeWidth={hasBroken ? "5" : "4"} 
+                strokeDasharray={hasBroken ? "6 3" : "none"}
               />
             );
           })}
@@ -136,8 +286,9 @@ function App() {
             const hy = (posU.y + posV.y) / 2;
             return (
               <g key={`h-${i}`}>
-                <circle cx={hx} cy={hy} r="12" fill="rgba(239, 68, 68, 0.2)" className="pulse" />
-                <text x={hx} y={hy+4} fill="#EF4444" fontSize="16" textAnchor="middle" fontWeight="bold">X</text>
+                <circle cx={hx} cy={hy} r="14" fill="rgba(239, 68, 68, 0.3)" className="pulse" />
+                <circle cx={hx} cy={hy} r="8" fill="#EF4444" />
+                <text x={hx} y={hy+3} fill="#FFFFFF" fontSize="9" textAnchor="middle" fontWeight="bold">✕</text>
               </g>
             );
           })}
@@ -185,7 +336,12 @@ function App() {
       <div className="main-content">
         {/* Column 1: AI Brain */}
         <div className="glass-card">
-          <h3 style={{marginBottom: '1rem', color: '#94A3B8'}}>AI Multi-Agent Reasoning Brain</h3>
+          <div className="panel-header">
+            <h3>AI Multi-Agent Reasoning Brain</h3>
+            <span className={`ai-status-badge ${aiDebating || state.emergencies.length > 0 ? 'active' : ''}`}>
+              {aiDebating || state.emergencies.length > 0 ? '⚡ DEBATING RESOLUTION' : '● ONLINE (2 AGENTS)'}
+            </span>
+          </div>
           <div className="ai-brain" style={{height: '350px'}}>
             {state.ai_brain.slice().reverse().map((log, i) => {
               let typeClass = '';
@@ -195,13 +351,20 @@ function App() {
               
               return <div key={i} className={`ai-entry ${typeClass}`}>{log}</div>;
             })}
-            {state.ai_brain.length === 0 && <div style={{color: '#64748B', fontStyle: 'italic', padding: '1rem'}}>AI Agents standing by...</div>}
+            {state.ai_brain.length === 0 && (
+              <div style={{color: '#64748B', fontStyle: 'italic', padding: '1rem'}}>
+                Multi-Agent system standing by (Dispatcher AI + Safety Inspector RAG ready)...
+              </div>
+            )}
           </div>
         </div>
 
         {/* Column 2: Live Section Status */}
         <div className="glass-card">
-          <h3 style={{marginBottom: '1rem', color: '#94A3B8'}}>Live Section Status</h3>
+          <div className="panel-header">
+            <h3>Live Section Status</h3>
+            <span className="section-count-badge">{sections.length} Sectors</span>
+          </div>
           <div className="logs-container" style={{height: '350px'}}>
             {sections.map(sec => {
               const [u, v] = sec.split(" ↔ ");
@@ -227,7 +390,7 @@ function App() {
                     <div style={{color: '#64748B', fontSize: '0.85rem', fontStyle: 'italic'}}>No active trains in section</div>
                   )}
                 </div>
-              )
+              );
             })}
           </div>
         </div>
@@ -235,7 +398,10 @@ function App() {
         {/* Column 3: Hazard Injection & Logs */}
         <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
           <div className="glass-card hazard-panel" style={{marginTop: 0}}>
-            <h3 style={{marginBottom: '1rem', color: '#EF4444'}}>Inject Track Failure</h3>
+            <h3 style={{marginBottom: '0.75rem', color: '#EF4444'}}>Inject Track Failure</h3>
+            <p style={{fontSize: '0.75rem', color: '#94A3B8', marginBottom: '0.75rem'}}>
+              Simulate physical rail breakdown to test Multi-Agent AI debate & rerouting.
+            </p>
             <select className="select-input" value={selectedSection} onChange={e => {setSelectedSection(e.target.value); setSelectedTrack("");}}>
               <option value="">-- Select Section --</option>
               {sections.map(s => <option key={s} value={s}>{s}</option>)}
@@ -248,9 +414,14 @@ function App() {
               </select>
             )}
             
-            <button className="btn btn-danger" style={{width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem'}} onClick={injectHazard} disabled={!selectedTrack}>
+            <button 
+              className="btn btn-danger" 
+              style={{width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem'}} 
+              onClick={injectHazard} 
+              disabled={!selectedTrack || isInjecting}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-              Break Track
+              {isInjecting ? "🚨 Injecting & Invoking AI..." : "Break Track"}
             </button>
           </div>
           

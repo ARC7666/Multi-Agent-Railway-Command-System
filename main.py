@@ -52,12 +52,22 @@ def get_state() -> Dict[str, Any]:
 
 async def simulation_loop() -> None:
     while sim.is_running:
-        sim.step()
+        try:
+            # Run sim.step() in a worker thread so the event loop is NEVER blocked by AI/I/O
+            await asyncio.to_thread(sim.step)
+        except Exception as e:
+            print(f"[SIMULATION ERROR]: {e}")
         await asyncio.sleep(2)
 
 @app.get("/ping")
 def ping():
-    return {"status": "alive", "message": "Render keep-alive successful"}
+    return {
+        "status": "alive",
+        "message": "Render keep-alive successful",
+        "is_running": sim.is_running,
+        "time_step": sim.time_step,
+        "train_count": len(sim.trains)
+    }
 
 @app.post("/start")
 def start_simulation(background_tasks: BackgroundTasks) -> Dict[str, str]:

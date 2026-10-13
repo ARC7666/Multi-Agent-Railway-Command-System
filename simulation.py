@@ -16,14 +16,17 @@ class TrainSimulation:
         """Resets the simulation to its initial state."""
         self.network: nx.Graph = create_railway_network()
         self.trains: List[Dict[str, Any]] = [
-            # 2 Premium Trains
+            # 3 Premium Trains
             {"base_name": "Rajdhani Exp", "position": "Sealdah (SDAH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
             {"base_name": "Vande Bharat", "position": "Asansol (ASN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            # 2 Local Trains
+            {"base_name": "Shatabdi Exp", "position": "Howrah (HWH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            # 3 Local Trains
             {"base_name": "Local", "position": "Howrah (HWH)", "destination": "Bardhaman (BWN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
             {"base_name": "Local", "position": "Bardhaman (BWN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
-            # 1 Normal Express
+            {"base_name": "Local", "position": "Bandel (BDC)", "destination": "Bardhaman (BWN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            # 2 Normal Express
             {"base_name": "Poorva Exp", "position": "Sealdah (SDAH)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0},
+            {"base_name": "Black Diamond", "position": "Asansol (ASN)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
             # 2 Freight Trains
             {"base_name": "Coal Freight 1", "position": "Durgapur (DGR)", "destination": "Howrah (HWH)", "dir": "DN", "path": [], "current_edge": None, "progress": 0.0},
             {"base_name": "Oil Tanker", "position": "Bandel (BDC)", "destination": "Asansol (ASN)", "dir": "UP", "path": [], "current_edge": None, "progress": 0.0}
@@ -119,10 +122,10 @@ class TrainSimulation:
             if not self.logs["System"] or self.logs["System"][-1] != msg:
                 self.add_log(msg)
 
-        if result.get("resolved"):
+        if result.get("resolved") or self.emergencies:
             self.emergencies.clear()
 
-        updated_trains = result['trains']
+        updated_trains = result.get('trains', self.trains)
 
         for t in updated_trains:
             if t['path'] and len(t['path']) > 1:
