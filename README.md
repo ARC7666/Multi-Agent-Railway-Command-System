@@ -27,17 +27,14 @@ source venv/bin/activate
 streamlit run app.py
 ```
 
-## Deployment & Render Free-Tier Keep-Alive
+## 24/7 High-Availability & Keep-Alive Architecture
 
-### Preventing 1-Minute Cold Starts on Render Free Tier
-Render free-tier web services automatically spin down after 15 minutes of inactivity. When a request arrives, Render takes 45–50 seconds to boot the Python environment.
+To guarantee the backend runs with zero cold starts and never spins down, a 4-tier keep-alive system is implemented:
 
-We have addressed this on multiple levels:
-1. **Frontend Smart Radar Screen**: The UI detects cold start, shows an animated radar and progress indicator, and auto-retries telemetry.
-2. **Frontend Keep-Alive Heartbeat**: While any user keeps the dashboard open in a browser tab, a background heartbeat pings `/ping` every 3 minutes.
-3. **Automated 24/7 Keep-Alive (Zero Downtime)**:
-   - A GitHub Actions workflow [`.github/workflows/render_keep_alive.yml`](file:///Users/ankitranjan/Documents/railway%20ml%20project/.github/workflows/render_keep_alive.yml) runs every 14 minutes. Add `RENDER_BACKEND_URL` to your GitHub repository secrets (or update the default URL in the workflow).
-   - Alternatively, add your `/ping` URL (e.g. `https://your-service.onrender.com/ping`) to a free monitoring service like [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) with a 10–14 minute interval.
+1. **Internal Self-Ping Daemon (`main.py`)**: Runs continuously as an async background task inside FastAPI's lifespan, pinging its own external URL (`https://railway-ai-backend.onrender.com/ping`) every 7 minutes, continually resetting Render's 15-minute inactivity idle timer.
+2. **GitHub Actions 5-Minute Pinger (`.github/workflows/render_keep_alive.yml`)**: Automated cron runs every 5 minutes with retry logic, ensuring active traffic even if an instance reboots.
+3. **Dedicated 24/7 External Ping (UptimeRobot / Cron-Job.org)**: Add `https://railway-ai-backend.onrender.com/ping` to [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) (HTTP GET every 5 or 10 minutes) for 100% guaranteed 24/7/365 uptime.
+4. **Browser Heartbeat**: Active dashboard clients ping `/ping` every 2 minutes to keep telemetry streaming in real time.
 
 ## Multi-Agent AI System Architecture
 - **Dispatcher Agent**: Evaluates track hazards and dynamically calculates alternative routing on parallel tracks.

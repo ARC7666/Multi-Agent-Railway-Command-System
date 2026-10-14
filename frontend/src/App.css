@@ -279,39 +279,59 @@
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 0.75rem;
+  position: relative;
 }
 
-.progress-bar-fill {
+.progress-bar-indeterminate {
+  width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
-  transition: width 0.8s ease;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  background: linear-gradient(90deg, #3b82f6, #06b6d4, #3b82f6);
+  background-size: 200% 100%;
+  animation: pulseBar 2s ease infinite;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+  border-radius: 4px;
+}
+
+@keyframes pulseBar {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 .waking-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 0.75rem;
   color: #94a3b8;
   font-family: 'JetBrains Mono', monospace;
 }
 
-.waking-info-alert {
-  background: rgba(30, 41, 59, 0.5);
-  border-left: 3px solid #3b82f6;
-  border-radius: 4px;
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-size: 0.8rem;
-  color: #cbd5e1;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
+.pulse-tag {
+  color: #10b981;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
 
-.waking-info-alert strong {
-  color: #60a5fa;
-  display: block;
-  margin-bottom: 0.25rem;
+.telemetry-badges {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.telemetry-badge {
+  font-size: 0.72rem;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .waking-actions {

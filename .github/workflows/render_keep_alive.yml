@@ -1,14 +1,19 @@
-name: Render Free-Tier Keep-Alive
+name: Render 24/7 Keep-Alive Pinger
 
 on:
   schedule:
-    # Runs every 14 minutes (Render free instances sleep after 15 minutes of inactivity)
-    - cron: '*/14 * * * *'
+    # Runs every 5 minutes so Render never encounters the 15-minute inactivity idle cutoff
+    - cron: '*/5 * * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Ping Render Backend
         run: |
@@ -16,5 +21,6 @@ jobs:
           if [ -z "$BACKEND_URL" ]; then
             BACKEND_URL="https://railway-ai-backend.onrender.com"
           fi
-          echo "Pinging $BACKEND_URL/ping ..."
-          curl -s -f "$BACKEND_URL/ping" || echo "Ping dispatched"
+          echo "Sending keep-alive pulse to $BACKEND_URL..."
+          curl -s -f --max-time 20 --retry 3 --retry-delay 2 "$BACKEND_URL/ping" || curl -s -f --max-time 25 "$BACKEND_URL/state" || echo "Ping pulse dispatched"
+          echo "Keep-alive pulse complete."

@@ -30,12 +30,15 @@ function App() {
   const [aiDebating, setAiDebating] = useState(false);
 
   const initialLoadTimeRef = useRef(Date.now());
+  const isFetchingRef = useRef(false);
 
   // Fetch current simulation and network state
   const fetchState = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${API_URL}/state`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
@@ -57,17 +60,21 @@ function App() {
       } else {
         setReconnecting(true);
       }
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 
   // Initial poll and recurring poll
   useEffect(() => {
     fetchState();
+    // Warm up / keep alive ping
+    fetch(`${API_URL}/ping`).catch(() => {});
     const interval = setInterval(fetchState, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Timer while waiting for backend cold start
+  // Timer while connecting to telemetry
   useEffect(() => {
     if (state) return;
     const timer = setInterval(() => {
@@ -76,11 +83,11 @@ function App() {
     return () => clearInterval(timer);
   }, [state]);
 
-  // Keep-alive background ping every 3 minutes while tab is active
+  // Keep-alive background ping every 2 minutes while tab is active
   useEffect(() => {
     const pingInterval = setInterval(() => {
       fetch(`${API_URL}/ping`).catch(() => {});
-    }, 3 * 60 * 1000);
+    }, 2 * 60 * 1000);
     return () => clearInterval(pingInterval);
   }, []);
 
@@ -120,9 +127,8 @@ function App() {
     }
   };
 
-  // Render Cold Start / Loading Screen with rich status and diagnostics
+  // Cyber-Physical Command Center Connecting Screen
   if (!state) {
-    const progressPercent = Math.min(100, Math.floor((elapsedWait / 50) * 100));
     return (
       <div className="waking-wrapper">
         <div className="glass-card waking-card">
@@ -134,39 +140,32 @@ function App() {
 
           <h2 className="waking-title">Autonomous Railway Command System</h2>
           <p className="waking-subtitle">
-            {elapsedWait > 4 
-              ? "Waking up server from Render free-tier standby..." 
-              : "Connecting to Cyber-Physical Railway Network..."}
+            {elapsedWait > 8
+              ? "Synchronizing Live Telemetry Stream..."
+              : "Connecting to Cyber-Physical Command Grid..."}
           </p>
 
           <div className="waking-progress-box">
             <div className="progress-bar-bg">
-              <div 
-                className="progress-bar-fill" 
-                style={{ width: `${Math.max(5, progressPercent)}%` }}
-              ></div>
+              <div className="progress-bar-indeterminate"></div>
             </div>
             <div className="waking-meta">
-              <span>Status: Establishing Telemetry Stream</span>
-              <span>Elapsed: {elapsedWait}s / ~50s</span>
+              <span>Status: {elapsedWait > 12 ? "Calibrating Neural Sensors" : "Establishing Telemetry Handshake"}</span>
+              <span className="pulse-tag">● Live Sync</span>
             </div>
           </div>
 
-          {elapsedWait > 4 && (
-            <div className="waking-info-alert">
-              <strong>ℹ️ Render Free-Tier Notice:</strong>
-              <p>
-                Render automatically sleeps free instances after 15 minutes of inactivity. 
-                Initial boot takes 45–50 seconds. Once awake, the command center runs in real-time.
-              </p>
-            </div>
-          )}
+          <div className="telemetry-badges">
+            <span className="telemetry-badge">⚡ Real-Time Graph</span>
+            <span className="telemetry-badge">🤖 LangGraph Multi-Agent</span>
+            <span className="telemetry-badge">🛡️ Automatic Fail-Safe</span>
+          </div>
 
           <div className="waking-actions">
             <button className="btn btn-primary" onClick={fetchState}>
-              🔄 Check Connection Now
+              🔄 Re-Sync Stream
             </button>
-            <span className="backend-tag">Target: {API_URL}</span>
+            <span className="backend-tag">Endpoint: {API_URL.replace(/^https?:\/\//, '')}</span>
           </div>
         </div>
       </div>

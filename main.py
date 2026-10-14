@@ -1,12 +1,50 @@
+import os
+import asyncio
+from contextlib import asynccontextmanager
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import asyncio
 from typing import Dict, Any, List, Optional
 from simulation import TrainSimulation
 import networkx as nx
 
-app = FastAPI(title="Railway Simulation API")
+EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "https://railway-ai-backend.onrender.com")
+
+async def keep_alive_daemon():
+    """
+    Self-ping background daemon:
+    Periodically sends an external HTTP request to its own public URL to
+    ensure the service continuously receives inbound HTTP traffic, resetting
+    Render's free-tier 15-minute inactivity timer so the server NEVER goes to sleep.
+    """
+    await asyncio.sleep(15)
+    print(f"[KEEP-ALIVE DAEMON] Activated. Target: {EXTERNAL_URL}")
+    while True:
+        try:
+            # Ping every 7 minutes (420s) - well below Render's 15-minute inactivity limit
+            await asyncio.sleep(420)
+            if EXTERNAL_URL and not any(h in EXTERNAL_URL for h in ("localhost", "127.0.0.1")):
+                ping_url = f"{EXTERNAL_URL.rstrip('/')}/ping"
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.get(ping_url)
+                    print(f"[KEEP-ALIVE DAEMON] Keep-alive pulse to {ping_url} -> HTTP {resp.status_code}")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[KEEP-ALIVE DAEMON] Pulse notice: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(keep_alive_daemon())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+app = FastAPI(title="Railway Simulation API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,6 +97,17 @@ async def simulation_loop() -> None:
             print(f"[SIMULATION ERROR]: {e}")
         await asyncio.sleep(2)
 
+@app.get("/")
+@app.head("/")
+def root():
+    return {
+        "status": "online",
+        "service": "Railway Simulation API",
+        "keep_alive": "active",
+        "endpoints": ["/state", "/ping", "/start", "/stop", "/reset", "/inject_hazard"]
+    }
+
+@app.head("/ping")
 @app.get("/ping")
 def ping():
     return {
